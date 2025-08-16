@@ -6,7 +6,7 @@ import fetch from 'node-fetch';
 
 // 설정 - 여기를 수정하세요!
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;        // 복사한 Discord 봇 토큰
-const GITHUB_TOKEN = precess.env.GITHUB_TOKEN;              // 복사한 GitHub 토큰  
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;              // 복사한 GitHub 토큰  
 const APPROVAL_CHANNEL_ID = process.env.APPROVAL_CHANNEL_ID // #art-approval 채널 ID
 const GITHUB_OWNER = 'rhw0213';                        // GitHub 사용자명
 const GITHUB_REPO = 'Test-project-S';                  // GitHub 저장소명
