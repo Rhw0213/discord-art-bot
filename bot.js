@@ -26,6 +26,8 @@ const octokit = new Octokit({
 
 // 대기 중인 업로드 저장
 const pendingUploads = new Map();
+// 처리된 메시지 ID 추적 (중복 방지)
+const processedMessages = new Set();
 
 // 봇 준비 완료
 client.once('ready', () => {
@@ -37,6 +39,16 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
     if (message.attachments.size > 0) {
+        // 메시지 중복 처리 방지
+        if (processedMessages.has(message.id)) {
+            console.log('⚠️ 이미 처리된 메시지:', message.id);
+            return;
+        }
+        
+        // 처리 중인 메시지로 표시
+        processedMessages.add(message.id);
+        console.log('✅ 새 메시지 처리 시작:', message.id);
+        
         console.log('파일 업로드 감지됨:', message.author.username);
         await handleFileUpload(message);
     }
@@ -87,7 +99,7 @@ async function handleFileUpload(message) {
 
         // 파일 중복 체크
         const isDuplicate = await checkFileExists(category, attachment.name);
-
+        
         await createApprovalRequest(message, attachment, category, isDuplicate);
     }
 }
@@ -96,13 +108,13 @@ async function handleFileUpload(message) {
 async function checkFileExists(category, fileName) {
     try {
         const filePath = `Addressables/${category}/${fileName}`;
-
+        
         await octokit.repos.getContent({
             owner: GITHUB_OWNER,
             repo: GITHUB_REPO,
             path: filePath
         });
-
+        
         console.log(`🔍 파일 중복 감지: ${fileName}`);
         return true; // 파일이 존재함
     } catch (error) {
@@ -163,7 +175,7 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
     // 임베드 색상과 제목 변경
     const embedColor = isDuplicate ? 0xFF9500 : 0xFFA500; // 중복 시 더 진한 주황색
     const embedTitle = isDuplicate ? '⚠️ 중복 파일 승인 요청' : '🎨 새 아트 파일 승인 요청';
-
+    
     let embedDescription = `**${originalMessage.author.username}**님이 새 파일을 업로드했습니다.`;
     if (isDuplicate) {
         embedDescription += `\n\n⚠️ **동일한 이름의 파일이 이미 존재합니다!**\n기존 파일을 덮어쓸지 확인해주세요.`;
@@ -194,7 +206,7 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
 
     // 버튼 구성 (중복 여부에 따라 다름)
     let buttons;
-
+    
     if (isDuplicate) {
         // 중복 파일 - 덮어쓰기 옵션 제공
         buttons = new ActionRowBuilder()
@@ -257,10 +269,10 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
     }
 
     // 원본 메시지에 답글
-    const replyMessage = isDuplicate
+    const replyMessage = isDuplicate 
         ? '⚠️ 중복 파일이 감지되었습니다! 팀장의 확인을 기다려주세요.'
         : '📨 승인 요청이 팀장에게 전송되었습니다! 승인을 기다려주세요.';
-
+        
     await originalMessage.reply(replyMessage);
 }
 
@@ -325,7 +337,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
             const extension = nameParts.pop();
             const baseName = nameParts.join('.');
             const newFileName = `${baseName}_${timestamp}.${extension}`;
-
+            
             filePath = `Addressables/${uploadData.category}/${newFileName}`;
             commitMessage = `Add ${newFileName} to ${uploadData.category} (duplicate resolved by ${interaction.user.username})`;
         } else {
@@ -410,10 +422,10 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
         });
 
         // 원본 메시지에 알림
-        const resultMessage = isOverwrite
+        const resultMessage = isOverwrite 
             ? `🔄 **${uploadData.attachment.name}** 파일이 덮어쓰기되었습니다!`
             : `✅ **${uploadData.attachment.name}** 파일이 승인되어 GitHub에 업로드되었습니다!`;
-
+            
         await uploadData.originalMessage.reply(`${resultMessage}\n🌐 **Unity에서 사용 가능**: 약 5분 후`);
 
         // 메모리에서 제거
@@ -421,7 +433,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
 
     } catch (error) {
         console.error('GitHub 업로드 실패:', error);
-
+        
         // 실패 임베드
         const errorEmbed = new EmbedBuilder()
             .setTitle('❌ 업로드 실패')
@@ -561,7 +573,8 @@ app.get('/', (req, res) => {
         uptime: Math.floor(process.uptime()),
         timestamp: new Date().toISOString(),
         guilds: client.guilds.cache.size,
-        pendingUploads: pendingUploads.size
+        pendingUploads: pendingUploads.size,
+        processedMessages: processedMessages.size
     });
 });
 
