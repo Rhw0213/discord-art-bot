@@ -3,12 +3,12 @@ import { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle
 import { Octokit } from '@octokit/rest';
 import fetch from 'node-fetch';
 
-// 설정 - 여기를 수정하세요!
-const DISCORD_TOKEN = 'YOUR_DISCORD_BOT_TOKEN';        // 복사한 Discord 봇 토큰
-const GITHUB_TOKEN = 'YOUR_GITHUB_TOKEN';              // 복사한 GitHub 토큰  
-const GITHUB_OWNER = 'rhw0213';                        // GitHub 사용자명
-const GITHUB_REPO = 'Test-project-S';                  // GitHub 저장소명
-const APPROVAL_CHANNEL_ID = 'YOUR_APPROVAL_CHANNEL_ID'; // #art-approval 채널 ID
+// 설정 - 환경변수 사용
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITHUB_OWNER = 'rhw0213';
+const GITHUB_REPO = 'Test-project-S';
+const APPROVAL_CHANNEL_ID = process.env.APPROVAL_CHANNEL_ID;
 
 // Discord 클라이언트 생성
 const client = new Client({
@@ -33,7 +33,7 @@ client.once('ready', () => {
 client.on('messageCreate', async (message) => {
     // 봇 메시지 무시
     if (message.author.bot) return;
-    
+
     // 파일이 첨부된 메시지만 처리
     if (message.attachments.size > 0) {
         await handleFileUpload(message);
@@ -43,12 +43,12 @@ client.on('messageCreate', async (message) => {
 // 버튼 클릭 처리
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
-    
+
     console.log('버튼 클릭됨:', interaction.customId);
     const [action, uploadId] = interaction.customId.split('_');
     console.log('액션:', action, '업로드 ID:', uploadId);
     console.log('현재 메모리 상태:', Array.from(pendingUploads.keys()));
-    
+
     if (action === 'approve') {
         await approveUpload(interaction, uploadId, false); // 덮어쓰기 아님
     } else if (action === 'reject') {
@@ -64,23 +64,23 @@ client.on('interactionCreate', async (interaction) => {
 async function handleFileUpload(message) {
     console.log('파일 업로드 감지됨:', message.author.username);
     const attachments = Array.from(message.attachments.values());
-    
+
     for (const attachment of attachments) {
         console.log('파일 처리 중:', attachment.name);
-        
+
         // 파일 크기 체크 (100MB 제한)
         if (attachment.size > 100 * 1024 * 1024) {
             await message.reply('❌ 파일 크기가 100MB를 초과합니다.');
             continue;
         }
-        
+
         // 카테고리 추출 (메시지에서)
         const category = extractCategory(message.content);
         console.log('카테고리:', category);
-        
+
         // 파일 중복 체크
         const isDuplicate = await checkFileExists(category, attachment.name);
-        
+
         // 승인 요청 생성
         await createApprovalRequest(message, attachment, category, isDuplicate);
     }
@@ -89,14 +89,14 @@ async function handleFileUpload(message) {
 // 파일 존재 여부 체크
 async function checkFileExists(category, fileName) {
     try {
-        const filePath = `addressables/${category}/${fileName}`;
-        
+        const filePath = `Addressables/${category}/${fileName}`;
+
         await octokit.repos.getContent({
             owner: GITHUB_OWNER,
             repo: GITHUB_REPO,
             path: filePath
         });
-        
+
         console.log(`🔍 파일 중복 감지: ${fileName}`);
         return true; // 파일이 존재함
     } catch (error) {
@@ -112,46 +112,46 @@ async function checkFileExists(category, fileName) {
 // 메시지에서 카테고리 추출
 function extractCategory(content) {
     const categories = {
-        '캐릭터': 'characters',
-        'character': 'characters',
-        '무기': 'weapons',
-        'weapon': 'weapons',
-        '배경': 'environments',
-        'environment': 'environments',
-        'ui': 'ui',
-        '이펙트': 'effects',
-        'effect': 'effects',
-        '오디오': 'audio',
-        'audio': 'audio',
-        '텍스처': 'textures',
-        'texture': 'textures'
+        '캐릭터': 'Characters',
+        'character': 'Characters',
+        '무기': 'Weapons',
+        'weapon': 'Weapons',
+        '배경': 'Environments',
+        'environment': 'Environments',
+        'ui': 'UI',
+        '이펙트': 'Effects',
+        'effect': 'Effects',
+        '오디오': 'Audio',
+        'audio': 'Audio',
+        '텍스처': 'Textures',
+        'texture': 'Textures'
     };
-    
+
     const lowerContent = content.toLowerCase();
-    
+
     for (const [key, value] of Object.entries(categories)) {
         if (lowerContent.includes(key)) {
             return value;
         }
     }
-    
-    return 'other'; // 기본값
+
+    return 'Other'; // 기본값
 }
 
 // 승인 요청 생성
 async function createApprovalRequest(originalMessage, attachment, category, isDuplicate) {
     const uploadId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
     console.log('승인 요청 생성:', uploadId, '중복 파일:', isDuplicate);
-    
+
     // 임베드 색상과 제목 변경
     const embedColor = isDuplicate ? 0xFF9500 : 0xFFA500; // 중복 시 더 진한 주황색
     const embedTitle = isDuplicate ? '⚠️ 중복 파일 승인 요청' : '🎨 새 아트 파일 승인 요청';
-    
+
     let embedDescription = `**${originalMessage.author.username}**님이 새 파일을 업로드했습니다.`;
     if (isDuplicate) {
         embedDescription += `\n\n⚠️ **동일한 이름의 파일이 이미 존재합니다!**\n기존 파일을 덮어쓸지 확인해주세요.`;
     }
-    
+
     // 승인 요청 임베드 생성
     const embed = new EmbedBuilder()
         .setTitle(embedTitle)
@@ -172,13 +172,13 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
     // 중복 파일일 때 경고 필드 추가
     if (isDuplicate) {
         embed.addFields(
-            { name: '🚨 중복 경고', value: `기존 파일: \`addressables/${category}/${attachment.name}\`\n이 파일을 덮어쓰면 **기존 데이터가 영구 삭제**됩니다!`, inline: false }
+            { name: '🚨 중복 경고', value: `기존 파일: \`Addressables/${category}/${attachment.name}\`\n이 파일을 덮어쓰면 **기존 데이터가 영구 삭제**됩니다!`, inline: false }
         );
     }
 
     // 버튼 구성 (중복 여부에 따라 다름)
     let buttons;
-    
+
     if (isDuplicate) {
         // 중복 파일 - 덮어쓰기 옵션 제공
         buttons = new ActionRowBuilder()
@@ -233,7 +233,7 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
             embeds: [embed],
             components: [buttons]
         });
-        
+
         // 승인 요청 데이터 저장 (메모리 - 실제로는 DB 사용 권장)
         pendingUploads.set(uploadId, {
             originalMessage: originalMessage,
@@ -244,17 +244,17 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
             uploadTime: new Date().toISOString(),
             isDuplicate: isDuplicate
         });
-        
+
         console.log('메모리에 저장됨:', uploadId, '총 개수:', pendingUploads.size);
     } else {
         console.error('승인 채널을 찾을 수 없습니다:', APPROVAL_CHANNEL_ID);
     }
-    
+
     // 원본 메시지에 답글
-    const replyMessage = isDuplicate 
+    const replyMessage = isDuplicate
         ? '⚠️ 중복 파일이 감지되었습니다! 팀장의 확인을 기다려주세요.'
         : '📨 승인 요청이 팀장에게 전송되었습니다! 승인을 기다려주세요.';
-        
+
     await originalMessage.reply(replyMessage);
 }
 
@@ -263,28 +263,28 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
     console.log('승인 처리 시작:', uploadId, '덮어쓰기:', isOverwrite);
     const uploadData = pendingUploads.get(uploadId);
     console.log('업로드 데이터 찾기 결과:', uploadData ? '찾음' : '못찾음');
-    
+
     if (!uploadData) {
         console.log('사용 가능한 Upload ID들:', Array.from(pendingUploads.keys()));
-        await interaction.reply({ 
-            content: '❌ 업로드 정보를 찾을 수 없습니다.', 
+        await interaction.reply({
+            content: '❌ 업로드 정보를 찾을 수 없습니다.',
             flags: 64 // ephemeral flag
         });
         return;
     }
-    
+
     try {
         // 파일 다운로드
         const fileResponse = await fetch(uploadData.attachment.url);
         const fileBuffer = await fileResponse.buffer();
         const base64Content = fileBuffer.toString('base64');
-        
+
         let filePath;
         let commitMessage;
 
         if (isOverwrite) {
             // 덮어쓰기 - 원본 이름 유지
-            filePath = `addressables/${uploadData.category}/${uploadData.attachment.name}`;
+            filePath = `Addressables/${uploadData.category}/${uploadData.attachment.name}`;
             commitMessage = `Overwrite ${uploadData.attachment.name} in ${uploadData.category} (approved by ${interaction.user.username})`;
         } else if (uploadData.isDuplicate) {
             // 중복 파일이지만 새 이름으로 저장
@@ -293,12 +293,12 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
             const extension = nameParts.pop();
             const baseName = nameParts.join('.');
             const newFileName = `${baseName}_${timestamp}.${extension}`;
-            
-            filePath = `addressables/${uploadData.category}/${newFileName}`;
+
+            filePath = `Addressables/${uploadData.category}/${newFileName}`;
             commitMessage = `Add ${newFileName} to ${uploadData.category} (duplicate resolved by ${interaction.user.username})`;
         } else {
             // 일반 업로드
-            filePath = `addressables/${uploadData.category}/${uploadData.attachment.name}`;
+            filePath = `Addressables/${uploadData.category}/${uploadData.attachment.name}`;
             commitMessage = `Add ${uploadData.attachment.name} to ${uploadData.category} (approved by ${interaction.user.username})`;
         }
 
@@ -334,7 +334,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
         }
 
         await octokit.repos.createOrUpdateFileContents(uploadParams);
-        
+
         // 승인 완료 임베드 업데이트
         const actionText = isOverwrite ? '덮어쓰기' : '승인';
         const successEmbed = new EmbedBuilder()
@@ -374,21 +374,21 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
             embeds: [successEmbed],
             components: [disabledButtons]
         });
-        
+
         // 원본 메시지에 승인 알림
-        const resultMessage = isOverwrite 
+        const resultMessage = isOverwrite
             ? `🔄 **${uploadData.attachment.name}** 파일이 덮어쓰기되었습니다!`
             : `✅ **${uploadData.attachment.name}** 파일이 승인되어 GitHub에 업로드되었습니다!`;
-            
+
         await uploadData.originalMessage.reply(`${resultMessage}\n🌐 **Unity에서 사용 가능**: 약 5분 후`);
-        
+
         // 메모리에서 제거
         pendingUploads.delete(uploadId);
-        
+
     } catch (error) {
         console.error('GitHub 업로드 실패:', error);
-        await interaction.reply({ 
-            content: `❌ GitHub 업로드 실패: ${error.message}`, 
+        await interaction.reply({
+            content: `❌ GitHub 업로드 실패: ${error.message}`,
             flags: 64 // ephemeral flag
         });
     }
@@ -397,15 +397,15 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
 // 거부 처리
 async function rejectUpload(interaction, uploadId) {
     const uploadData = pendingUploads.get(uploadId);
-    
+
     if (!uploadData) {
-        await interaction.reply({ 
-            content: '❌ 업로드 정보를 찾을 수 없습니다.', 
+        await interaction.reply({
+            content: '❌ 업로드 정보를 찾을 수 없습니다.',
             flags: 64 // ephemeral flag
         });
         return;
     }
-    
+
     // 거부 임베드 업데이트
     const rejectEmbed = new EmbedBuilder()
         .setTitle('❌ 파일 거부됨')
@@ -432,10 +432,10 @@ async function rejectUpload(interaction, uploadId) {
         embeds: [rejectEmbed],
         components: [disabledButtons]
     });
-    
+
     // 원본 메시지에 거부 알림
     await uploadData.originalMessage.reply(`❌ **${uploadData.attachment.name}** 파일이 거부되었습니다.\n💬 **거부자**: ${interaction.user.username}`);
-    
+
     // 메모리에서 제거
     pendingUploads.delete(uploadId);
 }
@@ -443,15 +443,15 @@ async function rejectUpload(interaction, uploadId) {
 // 취소 처리
 async function cancelUpload(interaction, uploadId) {
     const uploadData = pendingUploads.get(uploadId);
-    
+
     if (!uploadData) {
-        await interaction.reply({ 
-            content: '❌ 업로드 정보를 찾을 수 없습니다.', 
+        await interaction.reply({
+            content: '❌ 업로드 정보를 찾을 수 없습니다.',
             flags: 64
         });
         return;
     }
-    
+
     // 취소 임베드 업데이트
     const cancelEmbed = new EmbedBuilder()
         .setTitle('🚫 업로드 취소됨')
@@ -478,10 +478,10 @@ async function cancelUpload(interaction, uploadId) {
         embeds: [cancelEmbed],
         components: [disabledButtons]
     });
-    
+
     // 원본 메시지에 취소 알림
     await uploadData.originalMessage.reply(`🚫 **${uploadData.attachment.name}** 파일 업로드가 취소되었습니다.\n💬 **취소자**: ${interaction.user.username}`);
-    
+
     // 메모리에서 제거
     pendingUploads.delete(uploadId);
 }
@@ -501,7 +501,7 @@ const pendingUploads = new Map();
 // 봇 로그인
 client.login(DISCORD_TOKEN);
 
-// Render를 위한 더미 HTTP 서버 (포트 스캔 에러 해결)
+// Render를 위한 HTTP 서버
 import express from 'express';
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -510,8 +510,10 @@ app.get('/', (req, res) => {
     res.json({
         status: 'Discord Bot is running!',
         bot: client.user?.tag || 'Not logged in',
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString()
+        uptime: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString(),
+        guilds: client.guilds.cache.size,
+        pendingUploads: pendingUploads.size
     });
 });
 
@@ -523,30 +525,10 @@ app.get('/health', (req, res) => {
     });
 });
 
-app.listen(PORT, () => {
-    console.log(`HTTP 서버가 포트 ${PORT}에서 실행 중입니다.`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🌐 HTTP 서버가 포트 ${PORT}에서 실행 중입니다.`);
 });
 
 // 에러 처리
 client.on('error', console.error);
 process.on('unhandledRejection', console.error);
-
-// Render를 위한 HTTP 서버 (포트 스캔 에러 해결)
-import express from 'express';
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.get('/status', (req, res) => {
-    res.json({
-        status: 'Discord Bot is running!',
-        bot: client.user?.tag || 'Not logged in',
-        uptime: Math.floor(process.uptime()),
-        timestamp: new Date().toISOString(),
-        guilds: client.guilds.cache.size,
-        pendingUploads: pendingUploads.size
-    });
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🌐 HTTP 서버가 포트 ${PORT}에서 실행 중입니다.`);
-});
