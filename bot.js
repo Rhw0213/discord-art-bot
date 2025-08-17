@@ -33,7 +33,7 @@ client.once('ready', () => {
 client.on('messageCreate', async (message) => {
     // 봇 메시지 무시
     if (message.author.bot) return;
-    
+
     // 파일이 첨부된 메시지만 처리
     if (message.attachments.size > 0) {
         await handleFileUpload(message);
@@ -43,17 +43,17 @@ client.on('messageCreate', async (message) => {
 // 버튼 클릭 처리
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
-    
+
     console.log('버튼 클릭됨:', interaction.customId);
-    
+
     // 첫 번째 언더스코어만으로 분할 (Upload ID에 언더스코어가 있을 수 있음)
     const underscoreIndex = interaction.customId.indexOf('_');
     const action = interaction.customId.substring(0, underscoreIndex);
     const uploadId = interaction.customId.substring(underscoreIndex + 1); // 나머지 전체
-    
+
     console.log('액션:', action, '업로드 ID:', uploadId);
     console.log('현재 메모리 상태:', Array.from(pendingUploads.keys()));
-    
+
     if (action === 'approve') {
         await approveUpload(interaction, uploadId, false); // 덮어쓰기 아님
     } else if (action === 'reject') {
@@ -69,23 +69,23 @@ client.on('interactionCreate', async (interaction) => {
 async function handleFileUpload(message) {
     console.log('파일 업로드 감지됨:', message.author.username);
     const attachments = Array.from(message.attachments.values());
-    
+
     for (const attachment of attachments) {
         console.log('파일 처리 중:', attachment.name);
-        
+
         // 파일 크기 체크 (100MB 제한)
         if (attachment.size > 100 * 1024 * 1024) {
             await message.reply('❌ 파일 크기가 100MB를 초과합니다.');
             continue;
         }
-        
+
         // 카테고리 추출 (메시지에서)
         const category = extractCategory(message.content);
         console.log('카테고리:', category);
-        
+
         // 파일 중복 체크
         const isDuplicate = await checkFileExists(category, attachment.name);
-        
+
         // 승인 요청 생성
         await createApprovalRequest(message, attachment, category, isDuplicate);
     }
@@ -95,13 +95,13 @@ async function handleFileUpload(message) {
 async function checkFileExists(category, fileName) {
     try {
         const filePath = `Addressables/${category}/${fileName}`;
-        
+
         await octokit.repos.getContent({
             owner: GITHUB_OWNER,
             repo: GITHUB_REPO,
             path: filePath
         });
-        
+
         console.log(`🔍 파일 중복 감지: ${fileName}`);
         return true; // 파일이 존재함
     } catch (error) {
@@ -131,15 +131,15 @@ function extractCategory(content) {
         '텍스처': 'Textures',
         'texture': 'Textures'
     };
-    
+
     const lowerContent = content.toLowerCase();
-    
+
     for (const [key, value] of Object.entries(categories)) {
         if (lowerContent.includes(key)) {
             return value;
         }
     }
-    
+
     return 'Other'; // 기본값
 }
 
@@ -147,16 +147,16 @@ function extractCategory(content) {
 async function createApprovalRequest(originalMessage, attachment, category, isDuplicate) {
     const uploadId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
     console.log('승인 요청 생성:', uploadId, '중복 파일:', isDuplicate);
-    
+
     // 임베드 색상과 제목 변경
     const embedColor = isDuplicate ? 0xFF9500 : 0xFFA500; // 중복 시 더 진한 주황색
     const embedTitle = isDuplicate ? '⚠️ 중복 파일 승인 요청' : '🎨 새 아트 파일 승인 요청';
-    
+
     let embedDescription = `**${originalMessage.author.username}**님이 새 파일을 업로드했습니다.`;
     if (isDuplicate) {
         embedDescription += `\n\n⚠️ **동일한 이름의 파일이 이미 존재합니다!**\n기존 파일을 덮어쓸지 확인해주세요.`;
     }
-    
+
     // 승인 요청 임베드 생성
     const embed = new EmbedBuilder()
         .setTitle(embedTitle)
@@ -183,7 +183,7 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
 
     // 버튼 구성 (중복 여부에 따라 다름)
     let buttons;
-    
+
     if (isDuplicate) {
         // 중복 파일 - 덮어쓰기 옵션 제공
         buttons = new ActionRowBuilder()
@@ -238,7 +238,7 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
             embeds: [embed],
             components: [buttons]
         });
-        
+
         // 승인 요청 데이터 저장 (메모리 - 실제로는 DB 사용 권장)
         pendingUploads.set(uploadId, {
             originalMessage: originalMessage,
@@ -249,41 +249,44 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
             uploadTime: new Date().toISOString(),
             isDuplicate: isDuplicate
         });
-        
+
         console.log('메모리에 저장됨:', uploadId, '총 개수:', pendingUploads.size);
     } else {
         console.error('승인 채널을 찾을 수 없습니다:', APPROVAL_CHANNEL_ID);
     }
-    
+
     // 원본 메시지에 답글
-    const replyMessage = isDuplicate 
+    const replyMessage = isDuplicate
         ? '⚠️ 중복 파일이 감지되었습니다! 팀장의 확인을 기다려주세요.'
         : '📨 승인 요청이 팀장에게 전송되었습니다! 승인을 기다려주세요.';
-        
+
     await originalMessage.reply(replyMessage);
 }
 
 // 승인 처리
 async function approveUpload(interaction, uploadId, isOverwrite = false) {
+    await interaction.deferUpdate();
+
     console.log('승인 처리 시작:', uploadId, '덮어쓰기:', isOverwrite);
     const uploadData = pendingUploads.get(uploadId);
     console.log('업로드 데이터 찾기 결과:', uploadData ? '찾음' : '못찾음');
-    
+
     if (!uploadData) {
         console.log('사용 가능한 Upload ID들:', Array.from(pendingUploads.keys()));
-        await interaction.reply({ 
-            content: '❌ 업로드 정보를 찾을 수 없습니다.', 
-            flags: 64 // ephemeral flag
+        await interaction.followUp({
+            content: '❌ 업로드 정보를 찾을 수 없습니다.',
+            flags: 64
         });
         return;
     }
-    
+
     try {
         // 파일 다운로드
         const fileResponse = await fetch(uploadData.attachment.url);
-        const fileBuffer = await fileResponse.buffer();
+        const arrayBuffer = await fileResponse.arrayBuffer();
+        const fileBuffer = Buffer.from(arrayBuffer);
         const base64Content = fileBuffer.toString('base64');
-        
+
         let filePath;
         let commitMessage;
 
@@ -298,7 +301,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
             const extension = nameParts.pop();
             const baseName = nameParts.join('.');
             const newFileName = `${baseName}_${timestamp}.${extension}`;
-            
+
             filePath = `Addressables/${uploadData.category}/${newFileName}`;
             commitMessage = `Add ${newFileName} to ${uploadData.category} (duplicate resolved by ${interaction.user.username})`;
         } else {
@@ -339,7 +342,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
         }
 
         await octokit.repos.createOrUpdateFileContents(uploadParams);
-        
+
         // 승인 완료 임베드 업데이트
         const actionText = isOverwrite ? '덮어쓰기' : '승인';
         const successEmbed = new EmbedBuilder()
@@ -375,42 +378,44 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
                     .setDisabled(true)
             );
 
-        await interaction.update({
+        await interaction.editReply({
             embeds: [successEmbed],
             components: [disabledButtons]
         });
-        
+
         // 원본 메시지에 승인 알림
-        const resultMessage = isOverwrite 
+        const resultMessage = isOverwrite
             ? `🔄 **${uploadData.attachment.name}** 파일이 덮어쓰기되었습니다!`
             : `✅ **${uploadData.attachment.name}** 파일이 승인되어 GitHub에 업로드되었습니다!`;
-            
+
         await uploadData.originalMessage.reply(`${resultMessage}\n🌐 **Unity에서 사용 가능**: 약 5분 후`);
-        
+
         // 메모리에서 제거
         pendingUploads.delete(uploadId);
-        
+
     } catch (error) {
         console.error('GitHub 업로드 실패:', error);
-        await interaction.reply({ 
-            content: `❌ GitHub 업로드 실패: ${error.message}`, 
-            flags: 64 // ephemeral flag
+        await interaction.followUp({
+            content: `❌ GitHub 업로드 실패: ${error.message}`,
+            flags: 64
         });
     }
 }
 
 // 거부 처리
 async function rejectUpload(interaction, uploadId) {
+    await interaction.deferUpdate();
+
     const uploadData = pendingUploads.get(uploadId);
-    
+
     if (!uploadData) {
-        await interaction.reply({ 
-            content: '❌ 업로드 정보를 찾을 수 없습니다.', 
-            flags: 64 // ephemeral flag
+        await interaction.followUp({
+            content: '❌ 업로드 정보를 찾을 수 없습니다.',
+            flags: 64
         });
         return;
     }
-    
+
     // 거부 임베드 업데이트
     const rejectEmbed = new EmbedBuilder()
         .setTitle('❌ 파일 거부됨')
@@ -433,30 +438,32 @@ async function rejectUpload(interaction, uploadId) {
                 .setDisabled(true)
         );
 
-    await interaction.update({
+    await interaction.editReply({
         embeds: [rejectEmbed],
         components: [disabledButtons]
     });
-    
+
     // 원본 메시지에 거부 알림
     await uploadData.originalMessage.reply(`❌ **${uploadData.attachment.name}** 파일이 거부되었습니다.\n💬 **거부자**: ${interaction.user.username}`);
-    
+
     // 메모리에서 제거
     pendingUploads.delete(uploadId);
 }
 
 // 취소 처리
 async function cancelUpload(interaction, uploadId) {
+    await interaction.deferUpdate();
+
     const uploadData = pendingUploads.get(uploadId);
-    
+
     if (!uploadData) {
-        await interaction.reply({ 
-            content: '❌ 업로드 정보를 찾을 수 없습니다.', 
+        await interaction.followUp({
+            content: '❌ 업로드 정보를 찾을 수 없습니다.',
             flags: 64
         });
         return;
     }
-    
+
     // 취소 임베드 업데이트
     const cancelEmbed = new EmbedBuilder()
         .setTitle('🚫 업로드 취소됨')
@@ -479,14 +486,14 @@ async function cancelUpload(interaction, uploadId) {
                 .setDisabled(true)
         );
 
-    await interaction.update({
+    await interaction.editReply({
         embeds: [cancelEmbed],
         components: [disabledButtons]
     });
-    
+
     // 원본 메시지에 취소 알림
     await uploadData.originalMessage.reply(`🚫 **${uploadData.attachment.name}** 파일 업로드가 취소되었습니다.\n💬 **취소자**: ${interaction.user.username}`);
-    
+
     // 메모리에서 제거
     pendingUploads.delete(uploadId);
 }
