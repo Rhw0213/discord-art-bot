@@ -94,7 +94,7 @@ async function handleFileUpload(message) {
 // 파일 존재 여부 체크
 async function checkFileExists(category, fileName) {
     try {
-        const filePath = `Addressables/${category}/${fileName}`;
+        const filePath = `Assets/Addressables/${category}/${fileName}`;
 
         await octokit.repos.getContent({
             owner: GITHUB_OWNER,
@@ -177,7 +177,7 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
     // 중복 파일일 때 경고 필드 추가
     if (isDuplicate) {
         embed.addFields(
-            { name: '🚨 중복 경고', value: `기존 파일: \`Addressables/${category}/${attachment.name}\`\n이 파일을 덮어쓰면 **기존 데이터가 영구 삭제**됩니다!`, inline: false }
+            { name: '🚨 중복 경고', value: `기존 파일: \`Assets/Addressables/${category}/${attachment.name}\`\n이 파일을 덮어쓰면 **기존 데이터가 영구 삭제**됩니다!`, inline: false }
         );
     }
 
@@ -292,7 +292,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
 
         if (isOverwrite) {
             // 덮어쓰기 - 원본 이름 유지
-            filePath = `Addressables/${uploadData.category}/${uploadData.attachment.name}`;
+            filePath = `Assets/Addressables/${uploadData.category}/${uploadData.attachment.name}`;
             commitMessage = `Overwrite ${uploadData.attachment.name} in ${uploadData.category} (approved by ${interaction.user.username})`;
         } else if (uploadData.isDuplicate) {
             // 중복 파일이지만 새 이름으로 저장
@@ -302,11 +302,11 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
             const baseName = nameParts.join('.');
             const newFileName = `${baseName}_${timestamp}.${extension}`;
 
-            filePath = `Addressables/${uploadData.category}/${newFileName}`;
+            filePath = `Assets/Addressables/${uploadData.category}/${newFileName}`;
             commitMessage = `Add ${newFileName} to ${uploadData.category} (duplicate resolved by ${interaction.user.username})`;
         } else {
             // 일반 업로드
-            filePath = `Addressables/${uploadData.category}/${uploadData.attachment.name}`;
+            filePath = `Assets/Addressables/${uploadData.category}/${uploadData.attachment.name}`;
             commitMessage = `Add ${uploadData.attachment.name} to ${uploadData.category} (approved by ${interaction.user.username})`;
         }
 
