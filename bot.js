@@ -93,19 +93,19 @@ async function handleFileUpload(message) {
 // 메시지에서 카테고리 추출
 function extractCategory(content) {
     const categories = {
-        '캐릭터': 'characters',
-        'character': 'characters',
-        '무기': 'weapons',
-        'weapon': 'weapons',
-        '배경': 'environments',
-        'environment': 'environments',
-        'ui': 'ui',
-        '이펙트': 'effects',
-        'effect': 'effects',
-        '오디오': 'audio',
-        'audio': 'audio',
-        '텍스처': 'textures',
-        'texture': 'textures'
+        '캐릭터': 'Characters',
+        'character': 'Characters',
+        '무기': 'Weapons',
+        'weapon': 'Weapons',
+        '배경': 'Environments',
+        'environment': 'Environments',
+        'ui': 'Ui',
+        '이펙트': 'Effects',
+        'effect': 'Effects',
+        '오디오': 'Audio',
+        'audio': 'Audio',
+        '텍스처': 'Textures',
+        'texture': 'Textures'
     };
 
     const lowerContent = content.toLowerCase();
@@ -116,7 +116,7 @@ function extractCategory(content) {
         }
     }
 
-    return 'other'; // 기본값
+    return 'Other'; // 기본값
 }
 
 // 승인 요청 생성
@@ -229,7 +229,7 @@ async function approveUpload(interaction, uploadId) {
         const base64Content = fileBuffer.toString('base64');
 
         // GitHub에 업로드
-        const filePath = `Assets/${uploadData.category}/${uploadData.attachment.name}`;
+        const filePath = `Addressables/${uploadData.category}/${uploadData.attachment.name}`;
         console.log('GitHub 업로드 경로:', filePath);
 
         await octokit.repos.createOrUpdateFileContents({
