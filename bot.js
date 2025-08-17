@@ -351,7 +351,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
             .setColor(0x00FF00) // 초록색
             .addFields(
                 { name: '📁 GitHub 경로', value: filePath, inline: false },
-                { name: '🌐 접속 URL', value: `https://github.com/Rhw0213/Test-project-S/${filePath}`, inline: false },
+                { name: '🌐 접속 URL', value: `https://github.com/Rhw0213/Test-project-S/tree/main/${filePath}`, inline: false },
                 { name: '👤 승인자', value: interaction.user.username, inline: true },
                 { name: '⏰ 승인 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
             )
