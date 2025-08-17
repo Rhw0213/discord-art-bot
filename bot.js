@@ -356,3 +356,31 @@ client.login(DISCORD_TOKEN);
 // 에러 처리
 client.on('error', console.error);
 process.on('unhandledRejection', console.error);
+
+// Render를 위한 HTTP 서버 (포트 스캔 에러 해결)
+import express from 'express';
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.json({
+        status: 'Discord Bot is running!',
+        bot: client.user?.tag || 'Not logged in',
+        uptime: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString(),
+        guilds: client.guilds.cache.size,
+        pendingUploads: pendingUploads.size
+    });
+});
+
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        bot_ready: client.isReady(),
+        guilds: client.guilds.cache.size
+    });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🌐 HTTP 서버가 포트 ${PORT}에서 실행 중입니다.`);
+});
