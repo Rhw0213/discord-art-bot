@@ -1,5 +1,3 @@
-
-// Discord 승인 Bot
 import { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import { Octokit } from '@octokit/rest';
 import fetch from 'node-fetch';
@@ -279,6 +277,34 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
         return;
     }
 
+    // 즉시 응답 (3초 제한 해결)
+    const processingEmbed = new EmbedBuilder()
+        .setTitle('⏳ 파일 처리 중...')
+        .setDescription(`**${uploadData.attachment.name}** 파일을 GitHub에 업로드하고 있습니다.`)
+        .setColor(0xFFD700) // 금색
+        .addFields(
+            { name: '📄 파일명', value: uploadData.attachment.name, inline: true },
+            { name: '📁 카테고리', value: uploadData.category, inline: true },
+            { name: '🔄 상태', value: isOverwrite ? '덮어쓰기 중...' : '업로드 중...', inline: true }
+        )
+        .setTimestamp();
+
+    // 버튼 비활성화
+    const processingButtons = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('processing')
+                .setLabel('처리 중...')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('⏳')
+                .setDisabled(true)
+        );
+
+    await interaction.update({
+        embeds: [processingEmbed],
+        components: [processingButtons]
+    });
+
     try {
         // 파일 다운로드
         const fileResponse = await fetch(uploadData.attachment.url);
@@ -377,7 +403,8 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
                     .setDisabled(true)
             );
 
-        await interaction.update({
+        // 메시지 편집 (interaction.update 대신 editReply 사용)
+        await interaction.editReply({
             embeds: [successEmbed],
             components: [disabledButtons]
         });
@@ -394,9 +421,32 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
 
     } catch (error) {
         console.error('GitHub 업로드 실패:', error);
-        await interaction.reply({
-            content: `❌ GitHub 업로드 실패: ${error.message}`,
-            flags: 64
+
+        // 실패 임베드
+        const errorEmbed = new EmbedBuilder()
+            .setTitle('❌ 업로드 실패')
+            .setDescription(`**${uploadData.attachment.name}** 파일 업로드에 실패했습니다.`)
+            .setColor(0xFF0000)
+            .addFields(
+                { name: '❌ 오류 내용', value: error.message, inline: false },
+                { name: '👤 요청자', value: interaction.user.username, inline: true },
+                { name: '⏰ 실패 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+            )
+            .setTimestamp();
+
+        const errorButtons = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('failed')
+                    .setLabel('업로드 실패')
+                    .setStyle(ButtonStyle.Danger)
+                    .setEmoji('❌')
+                    .setDisabled(true)
+            );
+
+        await interaction.editReply({
+            embeds: [errorEmbed],
+            components: [errorButtons]
         });
     }
 }
