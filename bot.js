@@ -515,19 +515,56 @@ async function rejectUpload(interaction, uploadId) {
         return;
     }
 
-    const rejecterDisplayName = getDisplayName(interaction.user, interaction.member);
-    console.log('파일 거부됨:', uploadData.attachment.name, '거부자:', rejecterDisplayName);
+    // 거부 처리
+    async function rejectUpload(interaction, uploadId) {
+        await interaction.deferUpdate();
 
-    // 거부 임베드 업데이트
-    const rejectEmbed = new EmbedBuilder()
-        .setTitle('❌ 파일 거부됨')
-        .setDescription(`**${uploadData.attachment.name}** 파일이 거부되었습니다.`)
-        .setColor(0xFF0000) // 빨간색
-        .addFields(
-            { name: '👤 거부자', value: rejecterDisplayName, inline: true },
-            { name: '⏰ 거부 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
-        )
-        .setTimestamp();
+        const uploadData = pendingUploads.get(uploadId);
+
+        if (!uploadData) {
+            await interaction.followUp({
+                content: '❌ 업로드 정보를 찾을 수 없습니다.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        const rejecterDisplayName = getDisplayName(interaction.user, interaction.member);
+        console.log('파일 거부됨:', uploadData.attachment.name, '거부자:', rejecterDisplayName);
+
+        // 거부 임베드 업데이트
+        const rejectEmbed = new EmbedBuilder()
+            .setTitle('❌ 파일 거부됨')
+            .setDescription(`**${uploadData.attachment.name}** 파일이 거부되었습니다.`)
+            .setColor(0xFF0000) // 빨간색
+            .addFields(
+                { name: '👤 거부자', value: rejecterDisplayName, inline: true },
+                { name: '⏰ 거부 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+            )
+            .setTimestamp();
+
+        // 버튼 비활성화
+        const disabledButtons = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('rejected')
+                    .setLabel('거부됨')
+                    .setStyle(ButtonStyle.Danger)
+                    .setEmoji('❌')
+                    .setDisabled(true)
+            );
+
+        await interaction.editReply({
+            embeds: [rejectEmbed],
+            components: [disabledButtons]
+        });
+
+        // art-upload 채널의 원본 메시지에 거부 알림
+        await uploadData.originalMessage.reply(`❌ **${uploadData.attachment.name}** 파일이 거부되었습니다.\n💬 **거부자**: ${rejecterDisplayName}`);
+
+        // 메모리에서 제거
+        pendingUploads.delete(uploadId);
+    }
 
     // 버튼 비활성화
     const disabledButtons = new ActionRowBuilder()
