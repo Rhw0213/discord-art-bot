@@ -6,9 +6,12 @@ import fetch from 'node-fetch';
 // 설정 - 환경변수 사용
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const GITHUB_OWNER = 'rhw0213';
+const GITHUB_OWNER = 'AkiraHenderson';
 const GITHUB_REPO = 'Test-project-S';
-const APPROVAL_CHANNEL_ID = process.env.APPROVAL_CHANNEL_ID;
+
+// 채널 설정
+const UPLOAD_CHANNEL_ID = process.env.UPLOAD_CHANNEL_ID; // art-upload 채널
+const APPROVAL_CHANNEL_ID = process.env.APPROVAL_CHANNEL_ID; // art-approval 채널
 
 // ========== 권한 설정 부분 ==========
 // 방법 1: 특정 사용자 ID 리스트 (가장 간단)
@@ -16,7 +19,7 @@ const AUTHORIZED_USERS = [];
 
 // 방법 2: 특정 역할 이름 리스트
 const AUTHORIZED_ROLES = [
-    '@LEADER/BOSS'
+    '@LEADER/BOSS' // @ 기호 제거됨
     // 더 추가 가능
 ];
 
@@ -81,6 +84,8 @@ function hasPermission(interaction) {
 // 봇 준비 완료
 client.once('ready', () => {
     console.log(`✅ ${client.user.tag} 봇이 준비되었습니다!`);
+    console.log(`📁 업로드 채널 ID: ${UPLOAD_CHANNEL_ID}`);
+    console.log(`✅ 승인 채널 ID: ${APPROVAL_CHANNEL_ID}`);
 });
 
 // 메시지 처리
@@ -88,8 +93,12 @@ client.on('messageCreate', async (message) => {
     // 봇 메시지 무시
     if (message.author.bot) return;
 
+    // art-upload 채널에서만 파일 업로드 처리
+    if (message.channel.id !== UPLOAD_CHANNEL_ID) return;
+
     // 파일이 첨부된 메시지만 처리
     if (message.attachments.size > 0) {
+        console.log(`📁 art-upload 채널에서 파일 업로드 감지: ${message.author.username}`);
         await handleFileUpload(message);
     }
 });
@@ -297,7 +306,7 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
             );
     }
 
-    // 팀장 전용 채널에 전송
+    // art-approval 채널에 승인 요청 전송
     const approvalChannel = client.channels.cache.get(APPROVAL_CHANNEL_ID);
     if (approvalChannel) {
         const approvalMessage = await approvalChannel.send({
@@ -317,11 +326,12 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
         });
 
         console.log('메모리에 저장됨:', uploadId, '총 개수:', pendingUploads.size);
+        console.log('✅ art-approval 채널로 승인 요청 전송 완료');
     } else {
-        console.error('승인 채널을 찾을 수 없습니다:', APPROVAL_CHANNEL_ID);
+        console.error('❌ art-approval 채널을 찾을 수 없습니다:', APPROVAL_CHANNEL_ID);
     }
 
-    // 원본 메시지에 답글
+    // art-upload 채널의 원본 메시지에 답글
     const replyMessage = isDuplicate
         ? '⚠️ 중복 파일이 감지되었습니다! 팀장의 확인을 기다려주세요.'
         : '📨 승인 요청이 팀장에게 전송되었습니다! 승인을 기다려주세요.';
@@ -417,7 +427,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
             .setColor(0x00FF00) // 초록색
             .addFields(
                 { name: '📁 GitHub 경로', value: filePath, inline: false },
-                { name: '🌐 접속 URL', value: `https://github.com/Rhw0213/Test-project-S/tree/main/${filePath}`, inline: false },
+                { name: '🌐 접속 URL', value: `https://github.com/AkiraHenderson/Test-project-S/tree/main/${filePath}`, inline: false },
                 { name: '👤 승인자', value: interaction.user.username, inline: true },
                 { name: '⏰ 승인 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
             )
@@ -449,7 +459,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
             components: [disabledButtons]
         });
 
-        // 원본 메시지에 승인 알림
+        // art-upload 채널의 원본 메시지에 승인 알림
         const resultMessage = isOverwrite
             ? `🔄 **${uploadData.attachment.name}** 파일이 덮어쓰기되었습니다!`
             : `✅ **${uploadData.attachment.name}** 파일이 승인되어 GitHub에 업로드되었습니다!`;
@@ -511,7 +521,7 @@ async function rejectUpload(interaction, uploadId) {
         components: [disabledButtons]
     });
 
-    // 원본 메시지에 거부 알림
+    // art-upload 채널의 원본 메시지에 거부 알림
     await uploadData.originalMessage.reply(`❌ **${uploadData.attachment.name}** 파일이 거부되었습니다.\n💬 **거부자**: ${interaction.user.username}`);
 
     // 메모리에서 제거
@@ -561,7 +571,7 @@ async function cancelUpload(interaction, uploadId) {
         components: [disabledButtons]
     });
 
-    // 원본 메시지에 취소 알림
+    // art-upload 채널의 원본 메시지에 취소 알림
     await uploadData.originalMessage.reply(`🚫 **${uploadData.attachment.name}** 파일 업로드가 취소되었습니다.\n💬 **취소자**: ${interaction.user.username}`);
 
     // 메모리에서 제거
@@ -597,7 +607,9 @@ app.get('/', (req, res) => {
         guilds: client.guilds.cache.size,
         pendingUploads: pendingUploads.size,
         authorizedUsers: AUTHORIZED_USERS.length,
-        authorizedRoles: AUTHORIZED_ROLES
+        authorizedRoles: AUTHORIZED_ROLES,
+        uploadChannelId: UPLOAD_CHANNEL_ID,
+        approvalChannelId: APPROVAL_CHANNEL_ID
     });
 });
 
