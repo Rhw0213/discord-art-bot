@@ -19,7 +19,7 @@ const AUTHORIZED_USERS = [];
 
 // 방법 2: 특정 역할 이름 리스트
 const AUTHORIZED_ROLES = [
-    'LEADER/BOSS' // @ 기호 제거됨
+    'LEADER / BOSS' // @ 기호 제거됨
     // 더 추가 가능
 ];
 
