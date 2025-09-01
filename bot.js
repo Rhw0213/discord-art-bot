@@ -1,4 +1,4 @@
-// Discord 승인 Bot
+// Discord 승인 Bot (권한 체크 추가)
 import { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import { Octokit } from '@octokit/rest';
 import fetch from 'node-fetch';
@@ -9,6 +9,20 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_OWNER = 'rhw0213';
 const GITHUB_REPO = 'Test-project-S';
 const APPROVAL_CHANNEL_ID = process.env.APPROVAL_CHANNEL_ID;
+
+// ========== 권한 설정 부분 ==========
+// 방법 1: 특정 사용자 ID 리스트 (가장 간단)
+const AUTHORIZED_USERS = [];
+
+// 방법 2: 특정 역할 이름 리스트
+const AUTHORIZED_ROLES = [
+    'LEADER/BOSS'
+    // 더 추가 가능
+];
+
+// 방법 3: Discord 권한 체크 (관리자 권한 등)
+const REQUIRED_PERMISSIONS = []; // 또는 ['MANAGE_MESSAGES', 'KICK_MEMBERS'] 등
+// =====================================
 
 // Discord 클라이언트 생성
 const client = new Client({
@@ -23,6 +37,46 @@ const client = new Client({
 const octokit = new Octokit({
     auth: GITHUB_TOKEN
 });
+
+// 권한 체크 함수
+function hasPermission(interaction) {
+    const userId = interaction.user.id;
+    const member = interaction.member;
+
+    console.log(`권한 체크 - 사용자: ${interaction.user.username} (${userId})`);
+
+    // 방법 1: 사용자 ID 체크
+    if (AUTHORIZED_USERS.includes(userId)) {
+        console.log('✅ 사용자 ID로 권한 확인됨');
+        return true;
+    }
+
+    // 방법 2: 역할 체크
+    if (member && member.roles && member.roles.cache) {
+        const userRoles = member.roles.cache.map(role => role.name);
+        console.log('사용자 역할:', userRoles);
+
+        const hasRole = AUTHORIZED_ROLES.some(role => userRoles.includes(role));
+        if (hasRole) {
+            console.log('✅ 역할로 권한 확인됨');
+            return true;
+        }
+    }
+
+    // 방법 3: Discord 권한 체크
+    if (member && member.permissions) {
+        const hasRequiredPermission = REQUIRED_PERMISSIONS.some(permission =>
+            member.permissions.has(permission)
+        );
+        if (hasRequiredPermission) {
+            console.log('✅ Discord 권한으로 확인됨');
+            return true;
+        }
+    }
+
+    console.log('❌ 권한 없음');
+    return false;
+}
 
 // 봇 준비 완료
 client.once('ready', () => {
@@ -40,11 +94,23 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// 버튼 클릭 처리
+// 버튼 클릭 처리 (권한 체크 추가)
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
-    console.log('버튼 클릭됨:', interaction.customId);
+    console.log('버튼 클릭됨:', interaction.customId, '사용자:', interaction.user.username);
+
+    // 권한 체크 - 승인 관련 버튼만
+    const actionType = interaction.customId.split('_')[0];
+    if (['approve', 'reject', 'overwrite', 'cancel'].includes(actionType)) {
+        if (!hasPermission(interaction)) {
+            await interaction.reply({
+                content: '❌ 승인 권한이 없습니다. 팀장 또는 관리자만 승인/거부할 수 있습니다.',
+                ephemeral: true // 본인만 볼 수 있는 메시지
+            });
+            return;
+        }
+    }
 
     // 첫 번째 언더스코어만으로 분할 (Upload ID에 언더스코어가 있을 수 있음)
     const underscoreIndex = interaction.customId.indexOf('_');
@@ -267,7 +333,7 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
 async function approveUpload(interaction, uploadId, isOverwrite = false) {
     await interaction.deferUpdate();
 
-    console.log('승인 처리 시작:', uploadId, '덮어쓰기:', isOverwrite);
+    console.log('승인 처리 시작:', uploadId, '덮어쓰기:', isOverwrite, '승인자:', interaction.user.username);
     const uploadData = pendingUploads.get(uploadId);
     console.log('업로드 데이터 찾기 결과:', uploadData ? '찾음' : '못찾음');
 
@@ -275,7 +341,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
         console.log('사용 가능한 Upload ID들:', Array.from(pendingUploads.keys()));
         await interaction.followUp({
             content: '❌ 업로드 정보를 찾을 수 없습니다.',
-            flags: 64
+            ephemeral: true
         });
         return;
     }
@@ -397,7 +463,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
         console.error('GitHub 업로드 실패:', error);
         await interaction.followUp({
             content: `❌ GitHub 업로드 실패: ${error.message}`,
-            flags: 64
+            ephemeral: true
         });
     }
 }
@@ -411,10 +477,12 @@ async function rejectUpload(interaction, uploadId) {
     if (!uploadData) {
         await interaction.followUp({
             content: '❌ 업로드 정보를 찾을 수 없습니다.',
-            flags: 64
+            ephemeral: true
         });
         return;
     }
+
+    console.log('파일 거부됨:', uploadData.attachment.name, '거부자:', interaction.user.username);
 
     // 거부 임베드 업데이트
     const rejectEmbed = new EmbedBuilder()
@@ -459,10 +527,12 @@ async function cancelUpload(interaction, uploadId) {
     if (!uploadData) {
         await interaction.followUp({
             content: '❌ 업로드 정보를 찾을 수 없습니다.',
-            flags: 64
+            ephemeral: true
         });
         return;
     }
+
+    console.log('업로드 취소됨:', uploadData.attachment.name, '취소자:', interaction.user.username);
 
     // 취소 임베드 업데이트
     const cancelEmbed = new EmbedBuilder()
@@ -525,7 +595,9 @@ app.get('/', (req, res) => {
         uptime: Math.floor(process.uptime()),
         timestamp: new Date().toISOString(),
         guilds: client.guilds.cache.size,
-        pendingUploads: pendingUploads.size
+        pendingUploads: pendingUploads.size,
+        authorizedUsers: AUTHORIZED_USERS.length,
+        authorizedRoles: AUTHORIZED_ROLES
     });
 });
 
