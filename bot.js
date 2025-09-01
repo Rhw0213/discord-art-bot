@@ -1,15 +1,4 @@
-console.log('파일 거부됨:', uploadData.attachment.name, '거부자:', getDisplayName(interaction.user, interaction.member));
-
-// 거부 임베드 업데이트
-const rejectEmbed = new EmbedBuilder()
-    .setTitle('❌ 파일 거부됨')
-    .setDescription(`**${uploadData.attachment.name}** 파일이 거부되었습니다.`)
-    .setColor(0xFF0000) // 빨간색
-    .addFields(
-        { name: '👤 거부자', value: getDisplayName(interaction.user, interaction.member), inline: true },
-        { name: '⏰ 거부 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
-    )
-    .setTimestamp();// Discord 승인 Bot (권한 체크 추가)
+// Discord 승인 Bot (권한 체크 추가)
 import { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import { Octokit } from '@octokit/rest';
 import fetch from 'node-fetch';
@@ -30,7 +19,7 @@ const AUTHORIZED_USERS = [];
 
 // 방법 2: 특정 역할 이름 리스트
 const AUTHORIZED_ROLES = [
-    'LEADER/BOSS' // @ 기호 제거됨
+    'LEADER / BOSS' // @ 기호 제거됨
     // 더 추가 가능
 ];
 
@@ -52,7 +41,10 @@ const octokit = new Octokit({
     auth: GITHUB_TOKEN
 });
 
-// 사용자 표시명 가져오기 함수
+// 대기 중인 업로드 저장 (실제로는 데이터베이스 사용 권장)
+const pendingUploads = new Map();
+
+// 사용자 표시명 가져오기 함수 (서버 별명 우선)
 function getDisplayName(user, member) {
     return member ? member.displayName : user.username;
 }
@@ -386,7 +378,6 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
 
         let filePath;
         let commitMessage;
-
         const approverDisplayName = getDisplayName(interaction.user, interaction.member);
 
         if (isOverwrite) {
@@ -503,20 +494,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
 
 // 거부 처리
 async function rejectUpload(interaction, uploadId) {
-    await interaction.deferUpdate();
-
-    const uploadData = pendingUploads.get(uploadId);
-
-    if (!uploadData) {
-        await interaction.followUp({
-            content: '❌ 업로드 정보를 찾을 수 없습니다.',
-            ephemeral: true
-        });
-        return;
-    }
-
-    // 거부 처리
-    async function rejectUpload(interaction, uploadId) {
+    try {
         await interaction.deferUpdate();
 
         const uploadData = pendingUploads.get(uploadId);
@@ -564,80 +542,74 @@ async function rejectUpload(interaction, uploadId) {
 
         // 메모리에서 제거
         pendingUploads.delete(uploadId);
+
+    } catch (error) {
+        console.error('거부 처리 중 오류:', error);
+        await interaction.followUp({
+            content: '❌ 거부 처리 중 오류가 발생했습니다.',
+            ephemeral: true
+        });
     }
-
-    // 버튼 비활성화
-    const disabledButtons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('rejected')
-                .setLabel('거부됨')
-                .setStyle(ButtonStyle.Danger)
-                .setEmoji('❌')
-                .setDisabled(true)
-        );
-
-    await interaction.editReply({
-        embeds: [rejectEmbed],
-        components: [disabledButtons]
-    });
-
-    // art-upload 채널의 원본 메시지에 거부 알림
-    await uploadData.originalMessage.reply(`❌ **${uploadData.attachment.name}** 파일이 거부되었습니다.\n💬 **거부자**: ${rejecterDisplayName}`);
-
-    // 메모리에서 제거
-    pendingUploads.delete(uploadId);
 }
 
 // 취소 처리
 async function cancelUpload(interaction, uploadId) {
-    await interaction.deferUpdate();
+    try {
+        await interaction.deferUpdate();
 
-    const uploadData = pendingUploads.get(uploadId);
+        const uploadData = pendingUploads.get(uploadId);
 
-    if (!uploadData) {
+        if (!uploadData) {
+            await interaction.followUp({
+                content: '❌ 업로드 정보를 찾을 수 없습니다.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        const cancellerDisplayName = getDisplayName(interaction.user, interaction.member);
+        console.log('업로드 취소됨:', uploadData.attachment.name, '취소자:', cancellerDisplayName);
+
+        // 취소 임베드 업데이트
+        const cancelEmbed = new EmbedBuilder()
+            .setTitle('🚫 업로드 취소됨')
+            .setDescription(`**${uploadData.attachment.name}** 파일 업로드가 취소되었습니다.`)
+            .setColor(0x6C757D)
+            .addFields(
+                { name: '👤 취소자', value: cancellerDisplayName, inline: true },
+                { name: '⏰ 취소 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+            )
+            .setTimestamp();
+
+        // 버튼 비활성화
+        const disabledButtons = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('cancelled')
+                    .setLabel('취소됨')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setEmoji('🚫')
+                    .setDisabled(true)
+            );
+
+        await interaction.editReply({
+            embeds: [cancelEmbed],
+            components: [disabledButtons]
+        });
+
+        // art-upload 채널의 원본 메시지에 취소 알림
+        await uploadData.originalMessage.reply(`🚫 **${uploadData.attachment.name}** 파일 업로드가 취소되었습니다.\n💬 **취소자**: ${cancellerDisplayName}`);
+
+        // 메모리에서 제거
+        pendingUploads.delete(uploadId);
+
+    } catch (error) {
+        console.error('취소 처리 중 오류:', error);
         await interaction.followUp({
-            content: '❌ 업로드 정보를 찾을 수 없습니다.',
+            content: '❌ 취소 처리 중 오류가 발생했습니다.',
             ephemeral: true
         });
-        return;
     }
-
-    const cancellerDisplayName = getDisplayName(interaction.user, interaction.member);
-    console.log('업로드 취소됨:', uploadData.attachment.name, '취소자:', cancellerDisplayName);
-
-    // 취소 임베드 업데이트
-    const cancelEmbed = new EmbedBuilder()
-        .setTitle('🚫 업로드 취소됨')
-        .setDescription(`**${uploadData.attachment.name}** 파일 업로드가 취소되었습니다.`)
-        .setColor(0x6C757D)
-        .addFields(
-            { name: '👤 취소자', value: cancellerDisplayName, inline: true },
-            { name: '⏰ 취소 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
-        )
-        .setTimestamp();
-
-    // 버튼 비활성화
-    const disabledButtons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('cancelled')
-                .setLabel('취소됨')
-                .setStyle(ButtonStyle.Secondary)
-                .setEmoji('🚫')
-                .setDisabled(true)
-        );
-
-    await interaction.editReply({
-        embeds: [cancelEmbed],
-        components: [disabledButtons]
-    });
-
-    // art-upload 채널의 원본 메시지에 취소 알림
-    await uploadData.originalMessage.reply(`🚫 **${uploadData.attachment.name}** 파일 업로드가 취소되었습니다.\n💬 **취소자**: ${cancellerDisplayName}`);
-
-    // 메모리에서 제거
-    pendingUploads.delete(uploadId);
 }
 
 // 파일 크기 포맷팅
@@ -648,9 +620,6 @@ function formatFileSize(bytes) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
-
-// 대기 중인 업로드 저장 (실제로는 데이터베이스 사용 권장)
-const pendingUploads = new Map();
 
 // 봇 로그인
 client.login(DISCORD_TOKEN);
