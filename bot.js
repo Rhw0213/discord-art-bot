@@ -1,4 +1,15 @@
-// Discord 승인 Bot (권한 체크 추가)
+console.log('파일 거부됨:', uploadData.attachment.name, '거부자:', getDisplayName(interaction.user, interaction.member));
+
+// 거부 임베드 업데이트
+const rejectEmbed = new EmbedBuilder()
+    .setTitle('❌ 파일 거부됨')
+    .setDescription(`**${uploadData.attachment.name}** 파일이 거부되었습니다.`)
+    .setColor(0xFF0000) // 빨간색
+    .addFields(
+        { name: '👤 거부자', value: getDisplayName(interaction.user, interaction.member), inline: true },
+        { name: '⏰ 거부 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+    )
+    .setTimestamp();// Discord 승인 Bot (권한 체크 추가)
 import { Client, GatewayIntentBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import { Octokit } from '@octokit/rest';
 import fetch from 'node-fetch';
@@ -19,7 +30,7 @@ const AUTHORIZED_USERS = [];
 
 // 방법 2: 특정 역할 이름 리스트
 const AUTHORIZED_ROLES = [
-    'LEADER / BOSS' // @ 기호 제거됨
+    'LEADER/BOSS' // @ 기호 제거됨
     // 더 추가 가능
 ];
 
@@ -41,12 +52,18 @@ const octokit = new Octokit({
     auth: GITHUB_TOKEN
 });
 
+// 사용자 표시명 가져오기 함수
+function getDisplayName(user, member) {
+    return member ? member.displayName : user.username;
+}
+
 // 권한 체크 함수
 function hasPermission(interaction) {
     const userId = interaction.user.id;
     const member = interaction.member;
+    const displayName = getDisplayName(interaction.user, member);
 
-    console.log(`권한 체크 - 사용자: ${interaction.user.username} (${userId})`);
+    console.log(`권한 체크 - 사용자: ${displayName} (${userId})`);
 
     // 방법 1: 사용자 ID 체크
     if (AUTHORIZED_USERS.includes(userId)) {
@@ -98,7 +115,8 @@ client.on('messageCreate', async (message) => {
 
     // 파일이 첨부된 메시지만 처리
     if (message.attachments.size > 0) {
-        console.log(`📁 art-upload 채널에서 파일 업로드 감지: ${message.author.username}`);
+        const displayName = getDisplayName(message.author, message.member);
+        console.log(`📁 art-upload 채널에서 파일 업로드 감지: ${displayName}`);
         await handleFileUpload(message);
     }
 });
@@ -107,7 +125,7 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
-    console.log('버튼 클릭됨:', interaction.customId, '사용자:', interaction.user.username);
+    console.log('버튼 클릭됨:', interaction.customId, '사용자:', getDisplayName(interaction.user, interaction.member));
 
     // 권한 체크 - 승인 관련 버튼만
     const actionType = interaction.customId.split('_')[0];
@@ -142,7 +160,8 @@ client.on('interactionCreate', async (interaction) => {
 
 // 파일 업로드 처리
 async function handleFileUpload(message) {
-    console.log('파일 업로드 감지됨:', message.author.username);
+    const displayName = getDisplayName(message.author, message.member);
+    console.log('파일 업로드 감지됨:', displayName);
     const attachments = Array.from(message.attachments.values());
 
     for (const attachment of attachments) {
@@ -223,11 +242,13 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
     const uploadId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
     console.log('승인 요청 생성:', uploadId, '중복 파일:', isDuplicate);
 
+    const uploaderDisplayName = getDisplayName(originalMessage.author, originalMessage.member);
+
     // 임베드 색상과 제목 변경
     const embedColor = isDuplicate ? 0xFF9500 : 0xFFA500; // 중복 시 더 진한 주황색
     const embedTitle = isDuplicate ? '⚠️ 중복 파일 승인 요청' : '🎨 새 아트 파일 승인 요청';
 
-    let embedDescription = `**${originalMessage.author.username}**님이 새 파일을 업로드했습니다.`;
+    let embedDescription = `**${uploaderDisplayName}**님이 새 파일을 업로드했습니다.`;
     if (isDuplicate) {
         embedDescription += `\n\n⚠️ **동일한 이름의 파일이 이미 존재합니다!**\n기존 파일을 덮어쓸지 확인해주세요.`;
     }
@@ -241,7 +262,7 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
             { name: '📄 파일명', value: attachment.name, inline: true },
             { name: '📁 카테고리', value: category, inline: true },
             { name: '💾 파일 크기', value: formatFileSize(attachment.size), inline: true },
-            { name: '👤 업로더', value: originalMessage.author.username, inline: true },
+            { name: '👤 업로더', value: uploaderDisplayName, inline: true },
             { name: '🔗 원본 메시지', value: `[바로가기](${originalMessage.url})`, inline: true },
             { name: '📝 메시지', value: originalMessage.content || '없음', inline: false }
         )
@@ -320,7 +341,7 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
             attachment: attachment,
             category: category,
             approvalMessage: approvalMessage,
-            uploader: originalMessage.author.username,
+            uploader: uploaderDisplayName, // 서버 별명으로 저장
             uploadTime: new Date().toISOString(),
             isDuplicate: isDuplicate
         });
@@ -343,7 +364,7 @@ async function createApprovalRequest(originalMessage, attachment, category, isDu
 async function approveUpload(interaction, uploadId, isOverwrite = false) {
     await interaction.deferUpdate();
 
-    console.log('승인 처리 시작:', uploadId, '덮어쓰기:', isOverwrite, '승인자:', interaction.user.username);
+    console.log('승인 처리 시작:', uploadId, '덮어쓰기:', isOverwrite, '승인자:', getDisplayName(interaction.user, interaction.member));
     const uploadData = pendingUploads.get(uploadId);
     console.log('업로드 데이터 찾기 결과:', uploadData ? '찾음' : '못찾음');
 
@@ -366,10 +387,12 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
         let filePath;
         let commitMessage;
 
+        const approverDisplayName = getDisplayName(interaction.user, interaction.member);
+
         if (isOverwrite) {
             // 덮어쓰기 - 원본 이름 유지
             filePath = `Assets/12_Addressables/${uploadData.category}/${uploadData.attachment.name}`;
-            commitMessage = `Overwrite ${uploadData.attachment.name} in ${uploadData.category} (approved by ${interaction.user.username})`;
+            commitMessage = `Overwrite ${uploadData.attachment.name} in ${uploadData.category} (approved by ${approverDisplayName})`;
         } else if (uploadData.isDuplicate) {
             // 중복 파일이지만 새 이름으로 저장
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -379,11 +402,11 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
             const newFileName = `${baseName}_${timestamp}.${extension}`;
 
             filePath = `Assets/12_Addressables/${uploadData.category}/${newFileName}`;
-            commitMessage = `Add ${newFileName} to ${uploadData.category} (duplicate resolved by ${interaction.user.username})`;
+            commitMessage = `Add ${newFileName} to ${uploadData.category} (duplicate resolved by ${approverDisplayName})`;
         } else {
             // 일반 업로드
             filePath = `Assets/12_Addressables/${uploadData.category}/${uploadData.attachment.name}`;
-            commitMessage = `Add ${uploadData.attachment.name} to ${uploadData.category} (approved by ${interaction.user.username})`;
+            commitMessage = `Add ${uploadData.attachment.name} to ${uploadData.category} (approved by ${approverDisplayName})`;
         }
 
         // GitHub에 업로드 (덮어쓰기 시 SHA 가져오기)
@@ -428,7 +451,7 @@ async function approveUpload(interaction, uploadId, isOverwrite = false) {
             .addFields(
                 { name: '📁 GitHub 경로', value: filePath, inline: false },
                 { name: '🌐 접속 URL', value: `https://github.com/AkiraHenderson/Test-project-S/tree/main/${filePath}`, inline: false },
-                { name: '👤 승인자', value: interaction.user.username, inline: true },
+                { name: '👤 승인자', value: approverDisplayName, inline: true },
                 { name: '⏰ 승인 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
             )
             .setTimestamp();
@@ -492,7 +515,8 @@ async function rejectUpload(interaction, uploadId) {
         return;
     }
 
-    console.log('파일 거부됨:', uploadData.attachment.name, '거부자:', interaction.user.username);
+    const rejecterDisplayName = getDisplayName(interaction.user, interaction.member);
+    console.log('파일 거부됨:', uploadData.attachment.name, '거부자:', rejecterDisplayName);
 
     // 거부 임베드 업데이트
     const rejectEmbed = new EmbedBuilder()
@@ -500,7 +524,7 @@ async function rejectUpload(interaction, uploadId) {
         .setDescription(`**${uploadData.attachment.name}** 파일이 거부되었습니다.`)
         .setColor(0xFF0000) // 빨간색
         .addFields(
-            { name: '👤 거부자', value: interaction.user.username, inline: true },
+            { name: '👤 거부자', value: rejecterDisplayName, inline: true },
             { name: '⏰ 거부 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
         )
         .setTimestamp();
@@ -522,7 +546,7 @@ async function rejectUpload(interaction, uploadId) {
     });
 
     // art-upload 채널의 원본 메시지에 거부 알림
-    await uploadData.originalMessage.reply(`❌ **${uploadData.attachment.name}** 파일이 거부되었습니다.\n💬 **거부자**: ${interaction.user.username}`);
+    await uploadData.originalMessage.reply(`❌ **${uploadData.attachment.name}** 파일이 거부되었습니다.\n💬 **거부자**: ${rejecterDisplayName}`);
 
     // 메모리에서 제거
     pendingUploads.delete(uploadId);
@@ -542,7 +566,8 @@ async function cancelUpload(interaction, uploadId) {
         return;
     }
 
-    console.log('업로드 취소됨:', uploadData.attachment.name, '취소자:', interaction.user.username);
+    const cancellerDisplayName = getDisplayName(interaction.user, interaction.member);
+    console.log('업로드 취소됨:', uploadData.attachment.name, '취소자:', cancellerDisplayName);
 
     // 취소 임베드 업데이트
     const cancelEmbed = new EmbedBuilder()
@@ -550,7 +575,7 @@ async function cancelUpload(interaction, uploadId) {
         .setDescription(`**${uploadData.attachment.name}** 파일 업로드가 취소되었습니다.`)
         .setColor(0x6C757D)
         .addFields(
-            { name: '👤 취소자', value: interaction.user.username, inline: true },
+            { name: '👤 취소자', value: cancellerDisplayName, inline: true },
             { name: '⏰ 취소 시간', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
         )
         .setTimestamp();
@@ -572,7 +597,7 @@ async function cancelUpload(interaction, uploadId) {
     });
 
     // art-upload 채널의 원본 메시지에 취소 알림
-    await uploadData.originalMessage.reply(`🚫 **${uploadData.attachment.name}** 파일 업로드가 취소되었습니다.\n💬 **취소자**: ${interaction.user.username}`);
+    await uploadData.originalMessage.reply(`🚫 **${uploadData.attachment.name}** 파일 업로드가 취소되었습니다.\n💬 **취소자**: ${cancellerDisplayName}`);
 
     // 메모리에서 제거
     pendingUploads.delete(uploadId);
